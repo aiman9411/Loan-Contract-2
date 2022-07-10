@@ -39,4 +39,23 @@ contract Lending is ReentrancyGuard, Ownable {
         uint256 halfDebtInEth,
         address liquidator
     );
+
+    // @notice Modifier to check allowed tokens
+    modifier isAllowedToken(address token) {
+        if (s_tokenToPriceFeed[token] == address(0)) revert TokenNotAllowed(token);
+        _;
+    }
+
+    // @notice Modifier to check value more than zero
+    modifier moreThanZero(uint256 amount) {
+        if (amount == 0) revert NeedsMoreThanZero();
+        _;
+    }
+
+    function deposit(address token, uint256 amount) external nonReentrant isAllowedToken(token) moreThanZero(amount) {
+        s_accountToTokenDeposits[msg.sender][token] += amount;
+        bool success = IERC20(token).transferFrom(msg.sender, address(this), amount);
+        if (!success) revert TransferFailed();
+        emit Deposit(msg.sender, token, amount);
+    }
 }
