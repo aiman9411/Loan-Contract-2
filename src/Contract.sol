@@ -67,4 +67,68 @@ contract Lending is ReentrancyGuard, Ownable {
         _pullFunds(msg.sender, token, amount);
         require(healthFactor(msg.sender) >= MIN_HEALTH_FACTOR, "Platform will go insolvent");
     }
+
+    // @notice Pull fund function
+    function _pullFunds(address account, address token, uint256 amount) private {
+        require(s_accountToTokenDeposits[account][token] >= amount, "Insufficient Balance");
+        s_accountToTokenDeposits[account][token] -= amount;
+        bool success = IERC20(token).transfer(msg.sender, amount);
+        if (!success) revert TransferFailed();
+    }
+
+    function borrow(address token, uint256 amount) external nonReentrant isAllowedToken(token) moreThanZero(amount) {
+        require(IERC20(token).balanceOf(address(this)) >= amount, "Insufficient token");
+        require(healthFactor(msg.sender) > MIN_HEALTH_FACTOR, "Platform will go insolvent");
+        s_accountToTokenBorrows[msg.sender][token] += amount;
+        bool success = IERC20(token).transfer(msg.sender, amount);
+        if (!success) revert TransferFailed();
+        emit Borrow(msg.sender, token, amount);
+    }
+
+    // @notice Helper functions
+    function getEthValue(address token, uint256 amount) public view returns (uint256) {
+        AggregatorV3Interface priceFeed = AggregatorV3Interface(s_tokenToPriceFeed[token]);
+        (, int256 price,,,) = priceFeed.latestRoundData();
+        return (uint256(price) * amount) / 1e18;
+    }
+
+    function getAccountCollateralValue(address user) public view returns (uint256) {
+        uint256 totalCollateralValueInEth = 0;
+        for (uint256 index = 0; index < s_allowedTokens.length; index++) {
+            address token = s_allowedTokens[index];
+            uint256 amount = s_accountToTokenDeposits[user][token];
+            uint256 valueInEth = getEthValue(token, amount);
+            totalCollateralValueInEth += valueInEth;
+        }
+        return totalCollateralValueInEth;
+    }
+
+    function getAccountBorrowedValue(address user) public view returns (uint256) {
+        uint256 totalBorrowsInEth = 0;
+        for(uint256 index = 0; index < s_allowedTokens.length; index++) {
+            address token = s_allowedTokens[index];
+            uint256 amount = s_accountToTokenBorrows[user][token];
+            uint256 valueInEth = getEthValue(token, amount);
+            totalBorrowsInEth += valueInEth;
+        }
+        return totalBorrowsInEth;
+    }
+
+    function getAccountInformation(address user) public view returns (uint256 borrowedValueInEth, uint256 collateralValueInEth) {
+        borrowedValueInEth = getAccountBorrowedValue(user);
+        collateralValueInEth = getAccountCollateralValue(user);
+    }
+
+    function getTokenValueFromEth(address token, uint256 amount) public view returns (uint256) {
+        AggregatorV3Interface priceFeed = AggregatorV3Interface(s_tokenToPriceFeed[token]);
+        (,int256 price, , , ) = priceFeed.latestRoundData();
+        return (amount * 1e18 / uint256(price));
+    }
+
+    function healthFactor(address account) public view returns (uint256) {
+        (uint256 borrowedValueInEth, uint256 collateralValueInEth) = getAccountInformation(account);
+        uint256 collateralAdjustedForThreshold = (collateralValueInEth * LIQUIDATION_THRESHOLD) / 100;
+        if (borrowedValueInEth == 0) return 100e18;
+        return (collateralAdjustedForThreshold * 1e18)/ borrowedValueInEth;
+    }
 }
