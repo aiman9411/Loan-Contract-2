@@ -76,6 +76,7 @@ contract Lending is ReentrancyGuard, Ownable {
         if (!success) revert TransferFailed();
     }
 
+    // @notice Function to borrow
     function borrow(address token, uint256 amount) external nonReentrant isAllowedToken(token) moreThanZero(amount) {
         require(IERC20(token).balanceOf(address(this)) >= amount, "Insufficient token");
         require(healthFactor(msg.sender) > MIN_HEALTH_FACTOR, "Platform will go insolvent");
@@ -84,6 +85,21 @@ contract Lending is ReentrancyGuard, Ownable {
         if (!success) revert TransferFailed();
         emit Borrow(msg.sender, token, amount);
     }
+
+    // @notice Function to liquidate
+    function liquidate(address account, address repayToken, address rewardToken) external nonReentrant {
+        require(healthFactor(msg.sender) < MIN_HEALTH_FACTOR, "Account cannot be liquidated");
+        uint256 halfDebt = s_accountToTokenBorrows[account][repayToken] / 2;
+        uint256 halfDebtInEth = getEthValue(repayToken, halfDebt);
+        require(halfDebtInEth > 0, "Choose another repay token!");
+        uint256 rewardAmountInEth = (halfDebtInEth * LIQUIDATION_REWARD) / 100;
+        uint256 totalRewardAmountInRewardToken = getTokenValueFromEth(rewardToken, rewardAmountInEth + halfDebtInEth);
+        emit Liquidate(account, repayToken, rewardToken, halfDebtInEth, msg.sender);
+        _repay(account, repayToken, halfDebt);
+        _pullFunds(account, rewardToken, totalRewardAmountInRewardToken);
+    }
+
+    
 
     // @notice Helper functions
     function getEthValue(address token, uint256 amount) public view returns (uint256) {
