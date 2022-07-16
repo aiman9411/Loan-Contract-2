@@ -4,6 +4,7 @@ pragma solidity ^0.8.13;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
 // @notice Custom errors to save gas
 error TransferFailed();
@@ -52,10 +53,18 @@ contract Lending is ReentrancyGuard, Ownable {
         _;
     }
 
+    // @notice Deposit function for user
     function deposit(address token, uint256 amount) external nonReentrant isAllowedToken(token) moreThanZero(amount) {
         s_accountToTokenDeposits[msg.sender][token] += amount;
         bool success = IERC20(token).transferFrom(msg.sender, address(this), amount);
         if (!success) revert TransferFailed();
         emit Deposit(msg.sender, token, amount);
+    }
+
+    // @notice Withdraw function
+    function withdraw(address token, uint256 amount) external nonReentrant moreThanZero(amount) {
+        require(s_accountToTokenDeposits[msg.sender][token] >= 0, "Insufficient token");
+        _pullFunds(msg.sender, token, amount);
+        require(healthFactor(msg.sender) >= MIN_HEALTH_FACTOR, "Platform will go insolvent");
     }
 }
