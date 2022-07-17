@@ -99,7 +99,9 @@ contract Lending is ReentrancyGuard, Ownable {
         _pullFunds(account, rewardToken, totalRewardAmountInRewardToken);
     }
 
-    
+    function repay(address token, uint256 amount) external nonReentrant isAllowedToken(token) moreThanZero(amount) {
+        
+    }
 
     // @notice Helper functions
     function getEthValue(address token, uint256 amount) public view returns (uint256) {
