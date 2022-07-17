@@ -100,7 +100,14 @@ contract Lending is ReentrancyGuard, Ownable {
     }
 
     function repay(address token, uint256 amount) external nonReentrant isAllowedToken(token) moreThanZero(amount) {
-        
+        emit Repay(msg.sender, token, amount);
+        _repay(msg.sender, token, amount);
+    }
+
+    function _repay(address account, address token, uint256 amount) private {
+        s_accountToTokenBorrows[account][token] -= amount;
+        bool success = IERC20(token).transferFrom(msg.sender, address(this), amount);
+        if (!success) revert TransferFailed();
     }
 
     // @notice Helper functions
