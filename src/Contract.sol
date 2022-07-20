@@ -150,6 +150,7 @@ contract Lending is ReentrancyGuard, Ownable {
         return (amount * 1e18 / uint256(price));
     }
 
+    // @notice Helper function to check health factor
     function healthFactor(address account) public view returns (uint256) {
         (uint256 borrowedValueInEth, uint256 collateralValueInEth) = getAccountInformation(account);
         uint256 collateralAdjustedForThreshold = (collateralValueInEth * LIQUIDATION_THRESHOLD) / 100;
